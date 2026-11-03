@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>自律积分</title>
+<meta name="description" content="个人自律积分管理：锻炼、赚钱攒积分，消费、兑换奖励扣积分。数据只存本机，不上云。">
+
+<!-- ============ PWA 配置（manifest / 图标 / iOS 独立模式） ============ -->
+<meta name="theme-color" content="#0d9488">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="自律积分">
+
+<!-- ============ CDN：Tailwind（固定版本）+ Chart.js（报表图表，加载失败不影响记账） ============ -->
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+
+<style>
+/* 移动端基础体验 */
+* { -webkit-tap-highlight-color: transparent; }
+body { overscroll-behavior-y: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* 底部弹窗（bottom sheet）+ 打开动画 */
+.modal { position: fixed; inset: 0; background: rgba(15,23,42,.5); z-index: 50; display: none; align-items: flex-end; justify-content: center; }
+.modal.open { display: flex; }
+.modal-card { width: 100%; max-width: 28rem; background: #fff; border-radius: 1.5rem 1.5rem 0 0; padding: 1.25rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom)); animation: slideUp .22s ease; }
+@keyframes slideUp { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
+
+/* 轻提示 toast（悬浮在底栏上方，可带撤销按钮） */
+#toasts { position: fixed; left: 0; right: 0; bottom: calc(4.75rem + env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: center; gap: .5rem; z-index: 60; pointer-events: none; }
+.toast { pointer-events: auto; background: rgba(15,23,42,.92); color: #fff; padding: .6rem 1rem; border-radius: 9999px; font-size: .875rem; display: flex; align-items: center; gap: .75rem; box-shadow: 0 8px 24px rgba(0,0,0,.25); max-width: 90vw; animation: fadeIn .2s ease; }
+.toast button { color: #5eead4; font-weight: 600; }
+.toast.out { opacity: 0; transform: translateY(8px); transition: all .2s; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+input[type="date"], input[type="datetime-local"] { -webkit-appearance: none; min-height: 2.5rem; }
+</style>
+</head>
+
+<body class="bg-slate-100 text-slate-800">
+
+<!-- ============ 顶栏 ============ -->
+<header class="sticky top-0 z-30 bg-slate-100/90 backdrop-blur border-b border-slate-200/60">
+  <div class="max-w-md mx-auto flex items-center justify-between px-4 py-3">
+    <h1 class="text-lg font-bold flex items-center gap-1.5">⚡ 自律积分</h1>
+    <button onclick="switchPage('data')" aria-label="数据与设置" class="p-2 text-slate-500 active:scale-95 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" class="w-6 h-6">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/>
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main class="max-w-md mx-auto px-4 pt-4 pb-28 space-y-4">
+
+  <!-- ==================== 首页：积分 ==================== -->
+  <section id="page-home" class="space-y-4">
+
+    <!-- 当前可用积分（重点：醒目大数字） -->
+    <div class="rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white p-5 shadow-lg shadow-teal-600/20">
+      <div class="text-sm opacity-90">当前可用积分</div>
+      <div id="balance-num" class="text-5xl font-bold tracking-tight my-1">0</div>
+      <div class="flex justify-between text-xs opacity-90">
+        <span id="balance-today">今日净增 +0</span>
+        <span id="balance-spendable">可消费 ¥0.00</span>
+      </div>
+    </div>
+
+    <!-- 录入区：选项目 → 定数量 → 记一笔（批量靠数量 + 快捷倍率） -->
+    <div id="recorder" class="bg-white rounded-2xl shadow-sm p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold text-sm">记一笔</h2>
+        <span id="rec-rate" class="text-xs text-slate-400"></span>
+      </div>
+      <div id="rec-items" class="flex gap-2 overflow-x-auto no-scrollbar mt-3 pb-1"></div>
+      <div class="flex items-center gap-2 mt-3">
+        <button onclick="recAdjust(-1)" class="w-12 h-12 rounded-xl bg-slate-100 text-xl font-bold active:scale-95 shrink-0">−</button>
+        <div class="flex-1 relative">
+          <input id="rec-val" type="text" inputmode="decimal" value="1" oninput="renderHome()"
+                 class="w-full h-12 text-center text-2xl font-bold rounded-xl border border-slate-200 focus:border-teal-500 focus:outline-none px-10">
+          <span id="rec-unit" class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">个</span>
+        </div>
+        <button onclick="recAdjust(1)" class="w-12 h-12 rounded-xl bg-slate-100 text-xl font-bold active:scale-95 shrink-0">＋</button>
+      </div>
+      <div id="rec-quick" class="flex gap-2 mt-2 justify-center flex-wrap"></div>
+      <button id="rec-submit" onclick="recSubmit()" class="w-full h-12 mt-3 rounded-xl bg-teal-600 text-white font-semibold text-base disabled:opacity-40 active:scale-[.98] transition"></button>
+    </div>
+
+    <!-- 快捷记录：点一下就 1 次（带撤销）；需要数量的项目点了会跳到录入区 -->
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-3">快捷记录</h2>
+      <div id="quick-grid" class="grid grid-cols-4 gap-2"></div>
+    </div>
+
+    <!-- 流水记录：类型 + 时间筛选，可编辑/删除 -->
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold text-sm">流水记录</h2>
+        <span id="hist-count" class="text-xs text-slate-400"></span>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <select id="hist-type" onchange="histFilter()" class="h-11 px-2 rounded-xl border border-slate-200 bg-white text-sm flex-1">
+          <option value="all">全部类型</option>
+          <option value="earn">产出</option>
+          <option value="spend">消费</option>
+          <option value="redeem">兑换</option>
+        </select>
+        <button onclick="histClearFilter()" class="h-11 px-3 rounded-xl border border-slate-200 text-sm text-slate-500 shrink-0">清除</button>
+      </div>
+      <div class="flex gap-2 mt-2 items-center">
+        <input id="hist-from" type="date" onchange="histFilter()" class="h-11 px-2 rounded-xl border border-slate-200 text-sm flex-1 min-w-0">
+        <span class="text-slate-300 shrink-0">~</span>
+        <input id="hist-to" type="date" onchange="histFilter()" class="h-11 px-2 rounded-xl border border-slate-200 text-sm flex-1 min-w-0">
+      </div>
+      <div id="hist-list" class="mt-2"></div>
+      <button id="hist-more" onclick="histMore()" class="w-full h-11 mt-2 rounded-xl bg-slate-100 text-sm text-slate-600 font-medium hidden">加载更多</button>
+    </div>
+  </section>
+
+  <!-- ==================== 消费页 ==================== -->
+  <section id="page-spend" class="space-y-4 hidden">
+    <div class="rounded-2xl bg-white shadow-sm p-4">
+      <div class="flex items-center justify-between">
+        <h2 class="font-semibold text-sm">记一笔消费</h2>
+        <span id="bal-mini-spend" class="text-xs text-teal-600 font-medium"></span>
+      </div>
+      <div class="text-xs text-slate-400 mt-1">1 元 = 10 积分 · 只有实际花出去的钱才扣，存钱不扣</div>
+      <label class="text-xs text-slate-500 block mt-4">金额（元）</label>
+      <div class="relative mt-1">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xl text-slate-400">¥</span>
+        <input id="spend-amt" type="text" inputmode="decimal" placeholder="0.00" oninput="spendPreview()"
+               class="w-full h-14 pl-8 pr-3 text-2xl font-bold rounded-xl border border-slate-200 focus:border-teal-500 focus:outline-none">
+      </div>
+      <label class="text-xs text-slate-500 block mt-3">备注（可选）</label>
+      <input id="spend-note" type="text" placeholder="比如：午饭、买衣服、打车" class="w-full h-12 mt-1 px-3 rounded-xl border border-slate-200 text-sm focus:border-teal-500 focus:outline-none">
+      <div id="spend-preview" class="mt-3 text-sm text-slate-500"></div>
+      <div id="spend-blocked" class="hidden mt-1 text-sm text-rose-500 font-medium"></div>
+      <button id="spend-submit" onclick="spendSubmit()" disabled class="w-full h-12 mt-3 rounded-xl bg-teal-600 text-white font-semibold disabled:opacity-40">确认消费</button>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-2">最近消费</h2>
+      <div id="spend-list"></div>
+    </div>
+  </section>
+
+  <!-- ==================== 奖励页 ==================== -->
+  <section id="page-rewards" class="space-y-4 hidden">
+    <div class="rounded-2xl bg-white shadow-sm p-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="font-semibold text-sm">自定义奖励</h2>
+          <span id="bal-mini-rewards" class="text-xs text-teal-600 font-medium"></span>
+        </div>
+        <button onclick="openRewardForm()" class="h-10 px-4 rounded-xl bg-teal-600 text-white text-sm font-semibold shrink-0">＋ 新建奖励</button>
+      </div>
+      <div id="rewards-list" class="mt-3"></div>
+    </div>
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-1">兑换日志</h2>
+      <p class="text-xs text-slate-400 mb-2">奖励兑换与普通消费分开记账，报表里也是分列统计。</p>
+      <div id="redeem-log"></div>
+    </div>
+  </section>
+
+  <!-- ==================== 报表页 ==================== -->
+  <section id="page-report" class="space-y-4 hidden">
+    <div class="bg-white rounded-2xl shadow-sm p-3">
+      <div id="rp-tabs" class="flex gap-1.5">
+        <button class="flex-1 h-10 rounded-xl text-sm font-medium bg-teal-600 text-white" data-type="week" onclick="reportTab('week')">周报</button>
+        <button class="flex-1 h-10 rounded-xl text-sm font-medium bg-white text-slate-500" data-type="half" onclick="reportTab('half')">半月报</button>
+        <button class="flex-1 h-10 rounded-xl text-sm font-medium bg-white text-slate-500" data-type="month" onclick="reportTab('month')">月报</button>
+        <button class="flex-1 h-10 rounded-xl text-sm font-medium bg-white text-slate-500" data-type="year" onclick="reportTab('year')">年报</button>
+        <button class="flex-1 h-10 rounded-xl text-sm font-medium bg-white text-slate-500" data-type="custom" onclick="reportTab('custom')">自定义</button>
+      </div>
+      <div class="flex items-center justify-between mt-3">
+        <button onclick="reportNav(-1)" class="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-slate-500"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        </button>
+        <div id="rp-label" class="text-sm font-medium"></div>
+        <button onclick="reportNav(1)" class="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 text-slate-500"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+        </button>
+      </div>
+      <div id="rp-custom" class="hidden mt-3 flex gap-2">
+        <input id="rp-custom-from" type="date" class="flex-1 h-11 px-2 rounded-xl border border-slate-200 text-sm min-w-0">
+        <input id="rp-custom-to" type="date" class="flex-1 h-11 px-2 rounded-xl border border-slate-200 text-sm min-w-0">
+        <button onclick="applyCustom()" class="h-11 px-4 rounded-xl bg-teal-600 text-white text-sm font-semibold shrink-0">应用</button>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <div class="text-sm text-slate-500">周期净结余</div>
+      <div id="rp-net" class="text-4xl font-bold my-1 text-emerald-600">+0</div>
+      <div class="grid grid-cols-3 gap-2 mt-3 text-center">
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">产出积分</div><div id="rp-earn" class="font-bold text-emerald-600 text-sm mt-0.5">+0</div></div>
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">收入积分</div><div id="rp-income" class="font-bold text-emerald-600 text-sm mt-0.5">+0</div></div>
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">自律积分</div><div id="rp-discipline" class="font-bold text-emerald-600 text-sm mt-0.5">+0</div></div>
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">消费金额</div><div id="rp-spendAmt" class="font-bold text-sm mt-0.5">¥0.00</div></div>
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">消费扣分</div><div id="rp-spendPts" class="font-bold text-rose-500 text-sm mt-0.5">-0</div></div>
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">兑换扣分</div><div id="rp-redeemPts" class="font-bold text-rose-500 text-sm mt-0.5">-0</div></div>
+      </div>
+      <div class="text-[11px] text-slate-400 mt-2 text-center"><span id="rp-spendCnt">0 笔</span>消费 · <span id="rp-redeemCnt">0 次</span>兑换</div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-2">各项产出明细</h2>
+      <div id="rp-items"></div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-1">产出 / 扣分对比</h2>
+      <div class="flex gap-4 text-[11px] text-slate-400 mb-2"><span><span class="text-teal-500">●</span> 产出</span><span><span class="text-rose-500">●</span> 消费扣分</span><span><span class="text-rose-400">●</span> 兑换扣分</span></div>
+      <div class="h-56"><canvas id="chart-items"></canvas></div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-2">周期趋势（每日净结余）</h2>
+      <div class="h-56"><canvas id="chart-trend"></canvas></div>
+      <div id="chart-offline" class="hidden text-center text-slate-400 text-sm py-6">图表组件没加载成功（首次使用需要联网一次）</div>
+    </div>
+
+    <button id="rp-export" onclick="exportTextReport()" class="w-full h-12 rounded-xl bg-slate-800 text-white font-semibold">导出文本报表</button>
+  </section>
+
+  <!-- ==================== 数据页 ==================== -->
+  <section id="page-data" class="space-y-4 hidden">
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-3">数据概况</h2>
+      <div class="grid grid-cols-4 gap-2 text-center">
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">流水记录</div><div id="ds-entries" class="font-bold text-sm mt-0.5">0</div></div>
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">当前积分</div><div id="ds-balance" class="font-bold text-teal-600 text-sm mt-0.5">0</div></div>
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">奖励条目</div><div id="ds-rewards" class="font-bold text-sm mt-0.5">0</div></div>
+        <div class="bg-slate-50 rounded-xl py-2.5"><div class="text-[11px] text-slate-400">累计消费</div><div id="ds-spend" class="font-bold text-sm mt-0.5">¥0</div></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-1">备份与恢复</h2>
+      <p class="text-xs text-slate-400 mb-3">数据只存在这台设备的浏览器里。清浏览器数据、换浏览器、换手机前，先导出备份。</p>
+      <div class="flex gap-2">
+        <button onclick="exportJSON()" class="flex-1 h-12 rounded-xl bg-teal-600 text-white font-semibold">导出 JSON 备份</button>
+        <button onclick="document.getElementById('btn-import-file').click()" class="flex-1 h-12 rounded-xl bg-slate-800 text-white font-semibold">导入恢复</button>
+        <input id="btn-import-file" type="file" accept=".json,application/json" class="hidden" onchange="importPick(this.files[0])">
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-3">安装到手机 / 电脑</h2>
+      <div id="pwa-install" class="hidden"><button onclick="installApp()" class="w-full h-12 rounded-xl bg-teal-600 text-white font-semibold">📲 安装到主屏幕</button></div>
+      <div id="pwa-ios" class="hidden text-sm space-y-1.5 text-slate-600">
+        <p class="font-semibold text-slate-800">iPhone（Safari）安装步骤：</p>
+        <p>1. 把整个「自律积分」文件夹上传到免费静态托管（推荐 Netlify Drop：app.netlify.com/drop 拖进去就上线）；</p>
+        <p>2. 用 Safari 打开你的网址（必须是 https:// 开头）；</p>
+        <p>3. 点底部中间的「分享」按钮（方框＋向上箭头）；</p>
+        <p>4. 菜单往下滑，点「添加到主屏幕」→ 右上角「添加」；</p>
+        <p>5. 回主屏幕点「自律积分」图标，就是独立 App 了。</p>
+        <p class="text-xs text-slate-400">详细图文说明见《安装与打包指南.md》</p>
+      </div>
+      <div id="pwa-android" class="hidden text-sm space-y-1.5 text-slate-600">
+        <p class="font-semibold text-slate-800">安卓 / 电脑（Chrome / Edge）安装步骤：</p>
+        <p>1. 把整个「自律积分」文件夹上传到免费静态托管（推荐 Netlify Drop）；</p>
+        <p>2. 用 Chrome 打开 https:// 网址；</p>
+        <p>3. 点右上角菜单 ⋮ →「安装应用」（或「添加到主屏幕」）；</p>
+        <p>4. 桌面 / 主屏幕出现图标，点击即独立窗口运行。</p>
+        <p class="text-xs text-slate-400">打成 APK 安装包的方法见《安装与打包指南.md》</p>
+      </div>
+      <div id="pwa-file" class="hidden text-sm text-slate-600">
+        <p>现在是本地文件方式打开（file://）。浏览器规定：Service Worker 和 PWA 安装必须走 https:// 或 localhost，本地双击不支持安装。</p>
+        <p class="mt-2">所有记账功能不受影响，正常用。要装成 App 的话，按《安装与打包指南.md》把文件夹传到 Netlify Drop 再装。</p>
+      </div>
+      <div id="pwa-done" class="hidden text-sm text-teal-600 font-medium">✅ 已以独立 App 模式运行</div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm p-4">
+      <h2 class="font-semibold text-sm mb-1">积分规则</h2>
+      <p class="text-xs text-slate-400 mb-2">改规则：打开 index.html，最上面的 CONFIG 配置区就是全部参数。</p>
+      <table id="data-rules" class="w-full text-sm"></table>
+      <p class="text-xs text-slate-400 mt-3">💡 存钱、转入资产账户不算消费，不扣积分；只有实际花出去的钱才按 1 元 = 10 积分扣。</p>
+    </div>
+
+    <button onclick="clearAllData()" class="w-full h-12 rounded-xl bg-rose-50 text-rose-500 font-semibold border border-rose-200">清空所有数据</button>
+  </section>
+</main>
+
+<!-- ============ 底部导航 ============ -->
+<nav class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur border-t border-slate-200 z-40">
+  <div class="max-w-md mx-auto grid grid-cols-4 pb-[env(safe-area-inset-bottom)]">
+    <button class="nav-btn text-teal-600 flex flex-col items-center gap-0.5 py-2.5 text-[11px]" data-page="home" onclick="switchPage('home')">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3"/></svg>
+      <span>积分</span>
+    </button>
+    <button class="nav-btn text-slate-400 flex flex-col items-center gap-0.5 py-2.5 text-[11px]" data-page="spend" onclick="switchPage('spend')">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/></svg>
+      <span>消费</span>
+    </button>
+    <button class="nav-btn text-slate-400 flex flex-col items-center gap-0.5 py-2.5 text-[11px]" data-page="rewards" onclick="switchPage('rewards')">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+      <span>奖励</span>
+    </button>
+    <button class="nav-btn text-slate-400 flex flex-col items-center gap-0.5 py-2.5 text-[11px]" data-page="report" onclick="switchPage('report')">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+      <span>报表</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ============ 弹窗们 ============ -->
+<div id="modal-confirm" class="modal">
+  <div class="modal-card">
+    <h3 id="confirm-title" class="font-semibold text-base"></h3>
+    <p id="confirm-msg" class="text-sm text-slate-500 mt-2"></p>
+    <div class="flex gap-3 mt-5">
+      <button onclick="confirmCancel()" class="flex-1 h-12 rounded-xl bg-slate-100 font-semibold">取消</button>
+      <button id="confirm-ok" onclick="confirmOK()" class="flex-1 h-12 rounded-xl text-white font-semibold bg-rose-500">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-edit" class="modal">
+  <div class="modal-card">
+    <h3 id="edit-title" class="font-semibold text-base"></h3>
+    <div id="edit-body" class="mt-3"></div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="editCancel()" class="flex-1 h-12 rounded-xl bg-slate-100 font-semibold">取消</button>
+      <button onclick="editSave()" class="flex-1 h-12 rounded-xl bg-teal-600 text-white font-semibold">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-reward" class="modal">
+  <div class="modal-card">
+    <h3 id="rw-title" class="font-semibold text-base">新建奖励</h3>
+    <label class="text-xs text-slate-500 block mt-3">图标</label>
+    <div id="rw-icon-grid" class="grid grid-cols-7 gap-1.5 mt-1"></div>
+    <label class="text-xs text-slate-500 block mt-3">奖励名称</label>
+    <input id="rw-name" type="text" placeholder="比如：喝杯奶茶、买双鞋、玩一晚上游戏" class="w-full h-12 mt-1 px-3 rounded-xl border border-slate-200 text-sm focus:border-teal-500 focus:outline-none">
+    <label class="text-xs text-slate-500 block mt-3">消耗积分</label>
+    <input id="rw-cost" type="text" inputmode="numeric" placeholder="比如：500" class="w-full h-12 mt-1 px-3 rounded-xl border border-slate-200 text-sm focus:border-teal-500 focus:outline-none">
+    <div class="flex gap-3 mt-5">
+      <button onclick="rewardFormCancel()" class="flex-1 h-12 rounded-xl bg-slate-100 font-semibold">取消</button>
+      <button onclick="rewardFormSave()" class="flex-1 h-12 rounded-xl bg-teal-600 text-white font-semibold">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-redeem" class="modal">
+  <div class="modal-card">
+    <h3 id="redeem-title" class="font-semibold text-base"></h3>
+    <p id="redeem-msg" class="text-sm text-slate-500 mt-2"></p>
+    <div class="flex gap-3 mt-5">
+      <button onclick="redeemCancel()" class="flex-1 h-12 rounded-xl bg-slate-100 font-semibold">再想想</button>
+      <button onclick="redeemConfirm()" class="flex-1 h-12 rounded-xl bg-teal-600 text-white font-semibold">确认兑换</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-import" class="modal">
+  <div class="modal-card">
+    <h3 class="font-semibold text-base">怎么导入？</h3>
+    <p class="text-sm text-slate-500 mt-2">合并：保留现有数据，只新增备份里没有的记录（按 ID 去重）。<br>覆盖：先清空现有数据，再导入备份。</p>
+    <div class="flex gap-2 mt-5">
+      <button onclick="importCancel()" class="flex-1 h-12 rounded-xl bg-slate-100 font-semibold">取消</button>
+      <button onclick="importMerge()" class="flex-1 h-12 rounded-xl bg-teal-600 text-white font-semibold">合并导入</button>
+      <button onclick="importOverwrite()" class="flex-1 h-12 rounded-xl bg-rose-500 text-white font-semibold">覆盖导入</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+/* ================================================================
+ * ① 配置区 —— 所有分值、倍率、项目都集中在这，改完刷新就行
+ * ================================================================ */
+const CONFIG = {
+  APP_NAME: '自律积分',
+  DB_NAME: 'zilv-points-db',     // IndexedDB 库名
+  DB_VERSION: 1,                 // 表结构变了就 +1
+  SPEND_RATE: 10,                // ★ 消费倍率：实际花 1 元 = 扣 10 积分（现金:积分 = 1:10）
+  PAGE_SIZE: 30,                 // 流水每页条数
+  // 产出项目：points = 每 1 单位给的积分；cat 决定报表归到"收入积分"还是"自律积分"
+  // instant = 快捷网格里点一下直接记 1 单位（洗脸漱口这种固定 1 次的）；否则跳到录入区
+  earnItems: [
+    { id:'pushup', name:'俯卧撑',   unit:'个',   points:1,  cat:'discipline', icon:'💪', step:1,   quick:[10,20,50],   instant:false },
+    { id:'situp',  name:'仰卧起坐', unit:'个',   points:1,  cat:'discipline', icon:'🔥', step:1,   quick:[10,20,50],   instant:false },
+    { id:'earn',   name:'赚钱收入', unit:'元',   points:1,  cat:'income',     icon:'💰', step:1,   quick:[50,100,500], instant:false },
+    { id:'work',   name:'上班',     unit:'小时', points:10, cat:'discipline', icon:'💼', step:0.5, quick:[1,2,4,8],    instant:false },
+    { id:'wash',   name:'洗脸',     unit:'次',   points:5,  cat:'discipline', icon:'🧼', step:1,   quick:[1,2,3],      instant:true  },
+    { id:'rinse',  name:'漱口',     unit:'次',   points:5,  cat:'discipline', icon:'🪥', step:1,   quick:[1,2,3],      instant:true  },
+    { id:'shower', name:'洗澡',     unit:'次',   points:10, cat:'discipline', icon:'🚿', step:1,   quick:[1,2],        instant:true  },
+    { id:'shave',  name:'刮胡子',   unit:'次',   points:5,  cat:'discipline', icon:'🪒', step:1,   quick:[1,2],        instant:true  },
+  ],
+  rewardEmojis: ['🎁','🍔','🍕','🍰','🧋','☕','🍺','🍿','🎮','🎬','🎧','👟','⌚','📱','🛒','💄','🏀','🎸','✈️','🏖️'],
+};
+
+/* ================================================================
+ * ② 小工具
+ * ================================================================ */
+const el = id => document.getElementById(id);
+const DAY = 86400000;
+const pad2 = n => String(n).padStart(2, '0');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const signed = n => (n > 0 ? '+' : '') + n;
+const fmtMoney = n => (Math.round(n * 100) / 100).toFixed(2);
+const fmtNum = n => String(Math.round(Number(n) * 100) / 100);
+const itemById = id => CONFIG.earnItems.find(i => i.id === id);
+// 积分一律取整（四舍五入），上班 0.5 小时这种小数也能算
+const earnPoints = (it, amount) => Math.round(amount * it.points);
+const spendPoints = amount => Math.round(amount * CONFIG.SPEND_RATE);
+const uid = () => (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+
+function fmtDate(ts) { const d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+function fmtDT(ts) { const d = new Date(ts); return fmtDate(ts) + ' ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+// 周一为一周起点（中国习惯）
+function mondayOf(d) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function toLocalInput(ts) { const d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes()); }
+function toDateInput(ts) { const d = new Date(ts); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+// 报表周期：week 周 / half 半月(1-15,16-月末) / month 月 / year 年
+function computePeriod(type, anchor) {
+  const y = anchor.getFullYear(), m = anchor.getMonth();
+  if (type === 'week') { const s = mondayOf(anchor); return { start: s.getTime(), end: s.getTime() + 7 * DAY }; }
+  if (type === 'month') { return { start: new Date(y, m, 1).getTime(), end: new Date(y, m + 1, 1).getTime() }; }
+  if (type === 'year') { return { start: new Date(y, 0, 1).getTime(), end: new Date(y + 1, 0, 1).getTime() }; }
+  if (type === 'half') { const first = anchor.getDate() < 16; return { start: new Date(y, m, first ? 1 : 16).getTime(), end: (first ? new Date(y, m, 16) : new Date(y, m + 1, 1)).getTime() }; }
+  return { start: 0, end: 0 };
+}
+
+function downloadFile(name, text, mime) {
+  const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
+function toast(msg, opts) {
+  opts = opts || {};
+  const box = el('toasts');
+  const d = document.createElement('div');
+  d.className = 'toast';
+  const s = document.createElement('span'); s.textContent = msg; d.appendChild(s);
+  if (opts.action) {
+    const b = document.createElement('button'); b.textContent = opts.action;
+    b.onclick = () => { try { opts.fn && opts.fn(); } finally { d.remove(); } };
+    d.appendChild(b);
+  }
+  box.appendChild(d);
+  setTimeout(() => { d.classList.add('out'); setTimeout(() => d.remove(), 250); }, opts.action ? 5000 : 2600);
+}
+
+/* ================================================================
+ * ③ IndexedDB 封装（纯本地，不上云）
+ * ================================================================ */
+const DB = {
+  _db: null,
+  open() {
+    return new Promise((res, rej) => {
+      const rq = indexedDB.open(CONFIG.DB_NAME, CONFIG.DB_VERSION);
+      rq.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('entries')) { const st = db.createObjectStore('entries', { keyPath: 'id' }); st.createIndex('ts', 'ts'); }
+        if (!db.objectStoreNames.contains('rewards')) { db.createObjectStore('rewards', { keyPath: 'id' }); }
+      };
+      rq.onsuccess = e => { this._db = e.target.result; res(); };
+      rq.onerror = () => rej(rq.error);
+    });
+  },
+  all(store) {
+    return new Promise((res, rej) => {
+      const rq = this._db.transaction(store).objectStore(store).getAll();
+      rq.onsuccess = () => res(rq.result || []);
+      rq.onerror = () => rej(rq.error);
+    });
+  },
+  put(store, val) {
+    return new Promise((res, rej) => {
+      const rq = this._db.transaction(store, 'readwrite').objectStore(store).put(val);
+      rq.onsuccess = () => res(); rq.onerror = () => rej(rq.error);
+    });
+  },
+  del(store, id) {
+    return new Promise((res, rej) => {
+      const rq = this._db.transaction(store, 'readwrite').objectStore(store).delete(id);
+      rq.onsuccess = () => res(); rq.onerror = () => rej(rq.error);
+    });
+  },
+  clear(store) {
+    return new Promise((res, rej) => {
+      const rq = this._db.transaction(store, 'readwrite').objectStore(store).clear();
+      rq.onsuccess = () => res(); rq.onerror = () => rej(rq.error);
+    });
+  },
+};
+
+/* ================================================================
+ * ④ 全局状态
+ * ================================================================ */
+const state = {
+  entries: [],       // 全部流水：{id,type:'earn'|'spend'|'redeem',itemId?,amount?,points,note?,rewardName?,rewardIcon?,ts}
+  rewards: [],       // 奖励条目：{id,name,cost,icon}
+  page: 'home',
+  shown: CONFIG.PAGE_SIZE,
+  hist: { type: 'all', from: '', to: '', range: [0, 0] },
+  rec: { itemId: 'pushup', value: 1 },
+  report: { type: 'week', start: 0, end: 0 },
+  deferredPrompt: null,
+  charts: { a: null, b: null },
+};
+
+const balance = () => state.entries.reduce((s, e) => s + e.points, 0);
+
+async function refresh() {
+  state.entries = await DB.all('entries');
+  state.rewards = await DB.all('rewards');
+  state.entries.sort((a, b) => b.ts - a.ts);
+  renderAll();
+}
+
+function renderAll() {
+  renderBalance();
+  renderHome();
+  renderSpend();
+  renderRewards();
+  renderReport();
+  renderData();
+}
+
+/* ================================================================
+ * ⑤ 页面切换
+ * ================================================================ */
+function switchPage(name) {
+  state.page = name;
+  ['home', 'spend', 'rewards', 'report', 'data'].forEach(p => el('page-' + p).classList.toggle('hidden', p !== name));
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    const on = b.dataset.page === name && name !== 'data';
+    b.classList.toggle('text-teal-600', on);
+    b.classList.toggle('text-slate-400', !on);
+  });
+  if (name === 'report') renderCharts();
+  if (name === 'data') renderPWA();
+  window.scrollTo(0, 0);
+}
+
+/* ================================================================
+ * ⑥ 首页：余额 / 录入 / 快捷记录 / 流水
+ * ================================================================ */
+function renderBalance() {
+  const bal = balance();
+  el('balance-num').textContent = bal;
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const todayNet = state.entries.filter(e => e.ts >= t0.getTime()).reduce((s, e) => s + e.points, 0);
+  el('balance-today').textContent = '今日净增 ' + signed(todayNet);
+  el('balance-spendable').textContent = '可消费 ¥' + fmtMoney(Math.floor(bal / CONFIG.SPEND_RATE * 100) / 100);
+  el('bal-mini-spend').textContent = '可用 ' + bal + ' 分';
+  el('bal-mini-rewards').textContent = '可用 ' + bal + ' 分';
+}
+
+function buildRecorderChips() {
+  el('rec-items').innerHTML = CONFIG.earnItems.map(it =>
+    '<button data-id="' + it.id + '" class="rec-chip shrink-0 px-3 py-1.5 rounded-full text-sm font-medium bg-slate-100 text-slate-600" onclick="recSelect(\'' + it.id + '\')">' + it.icon + ' ' + it.name + '</button>'
+  ).join('');
+}
+
+function buildQuickGrid() {
+  el('quick-grid').innerHTML = CONFIG.earnItems.map(it =>
+    '<button onclick="quickTap(\'' + it.id + '\')" class="flex flex-col items-center gap-0.5 py-3 rounded-2xl bg-slate-50 border border-slate-100 active:scale-95 active:bg-teal-50 transition">'
+    + '<span class="text-2xl">' + it.icon + '</span>'
+    + '<span class="text-xs font-medium">' + it.name + '</span>'
+    + '<span class="text-[10px] text-teal-600">' + (it.instant ? '点一下 +' + it.points + ' 分' : '1' + it.unit + ' = +' + it.points + ' 分') + '</span></button>'
+  ).join('');
+}
+
+function renderHome() {
+  // 录入区：选中态 + 实时积分预览
+  document.querySelectorAll('#rec-items .rec-chip').forEach(b => {
+    const on = b.dataset.id === state.rec.itemId;
+    b.className = 'rec-chip shrink-0 px-3 py-1.5 rounded-full text-sm font-medium ' + (on ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-600');
+  });
+  const it = itemById(state.rec.itemId);
+  if (it) {
+    el('rec-rate').textContent = '1 ' + it.unit + ' = +' + it.points + ' 分';
+    el('rec-unit').textContent = it.unit;
+    el('rec-quick').innerHTML = '<button class="px-3 py-1.5 rounded-full bg-slate-100 text-sm text-slate-500" onclick="recSet(0)">清空</button>'
+      + (it.quick || []).map(q => '<button class="px-3 py-1.5 rounded-full bg-slate-100 text-sm text-teal-700 font-medium" onclick="recQuick(' + q + ')">+' + q + '</button>').join('');
+    const v = parseFloat(el('rec-val').value) || 0;
+    const pts = earnPoints(it, v);
+    el('rec-submit').textContent = v > 0 ? it.icon + ' 记一笔 ' + signed(pts) + ' 分' : '（先输入数量）';
+    el('rec-submit').disabled = v <= 0;
+  }
+  renderHistory();
+}
+
+function recSelect(id) {
+  state.rec.itemId = id;
+  const it = itemById(id);
+  el('rec-val').value = it && it.input === 'money' ? '' : '1';
+  renderHome();
+}
+function recAdjust(d) {
+  const it = itemById(state.rec.itemId);
+  const v = parseFloat(el('rec-val').value) || 0;
+  const nv = Math.round((v + d) * 100) / 100;
+  el('rec-val').value = nv > 0 ? nv : 0;
+  renderHome();
+}
+function recQuick(v) { el('rec-val').value = v; renderHome(); }
+function recSet(v) { el('rec-val').value = v; renderHome(); }
+
+async function recSubmit() {
+  const it = itemById(state.rec.itemId);
+  const v = parseFloat(el('rec-val').value);
+  if (!isFinite(v) || v <= 0) { toast('数量得是正数，重新输'); return; }
+  await addEarn(it.id, v);
+}
+
+// 快捷网格：instant 项目点一下直接记 1 单位；其他项目跳到录入区
+function quickTap(id) {
+  const it = itemById(id);
+  if (!it) return;
+  if (it.instant) { addEarn(id, 1); return; }
+  recSelect(id);
+  el('rec-val').focus();
+  el('recorder').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/* ---------- 流水筛选与列表 ---------- */
+function histFilter() {
+  const h = state.hist;
+  h.type = el('hist-type').value;
+  h.from = el('hist-from').value;
+  h.to = el('hist-to').value;
+  let from = 0, to = 0;
+  if (h.from) { const p = h.from.split('-').map(Number); from = new Date(p[0], p[1] - 1, p[2]).getTime(); }
+  if (h.to) { const p = h.to.split('-').map(Number); to = new Date(p[0], p[1] - 1, p[2]).getTime() + DAY; }
+  if (from && to && from > to) { const t = from; from = to - DAY; to = t + DAY; } // 起止写反了自动换过来
+  h.range = [from, to];
+  state.shown = CONFIG.PAGE_SIZE;
+  renderHistory();
+}
+function histClearFilter() {
+  el('hist-type').value = 'all'; el('hist-from').value = ''; el('hist-to').value = '';
+  histFilter();
+}
+function histMore() { state.shown += CONFIG.PAGE_SIZE; renderHistory(); }
+
+function filteredEntries() {
+  const h = state.hist;
+  return state.entries.filter(e => {
+    if (h.type === 'earn' && e.type !== 'earn') return false;
+    if (h.type === 'spend' && e.type !== 'spend') return false;
+    if (h.type === 'redeem' && e.type !== 'redeem') return false;
+    if (h.range[0] && e.ts < h.range[0]) return false;
+    if (h.range[1] && e.ts >= h.range[1]) return false;
+    return true;
+  });
+}
+
+function entryRow(e) {
+  const it = e.type === 'earn' ? itemById(e.itemId) : null;
+  const icon = e.type === 'earn' ? (it ? it.icon : '⭐') : (e.type === 'spend' ? '💸' : (e.rewardIcon || '🎁'));
+  const title = e.type === 'earn' ? (it ? it.name + ' × ' + fmtNum(e.amount) : e.itemId)
+    : (e.type === 'spend' ? '消费 ¥' + fmtMoney(e.amount) : '兑换「' + (e.rewardName || '奖励') + '」');
+  const sub = (e.type === 'spend' && e.note) ? fmtDT(e.ts) + ' · ' + e.note : fmtDT(e.ts);
+  const pts = e.type === 'earn'
+    ? '<span class="font-bold text-emerald-600">' + signed(e.points) + '</span>'
+    : '<span class="font-bold text-rose-500">' + signed(e.points) + '</span>';
+  const editBtn = (e.type === 'earn' || e.type === 'spend')
+    ? '<button class="text-slate-400 hover:text-teal-600" onclick="openEdit(\'' + e.id + '\')">编辑</button>' : '';
+  return '<div class="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">'
+    + '<div class="text-2xl w-8 text-center shrink-0">' + icon + '</div>'
+    + '<div class="flex-1 min-w-0"><div class="font-medium truncate">' + esc(title) + '</div>'
+    + '<div class="text-xs text-slate-400 truncate">' + esc(sub) + '</div></div>'
+    + '<div class="text-right shrink-0"><div>' + pts + '</div>'
+    + '<div class="flex gap-2 justify-end mt-1 text-xs">' + editBtn
+    + '<button class="text-rose-400" onclick="askDelete(\'' + e.id + '\')">删除</button></div></div></div>';
+}
+
+function renderHistory() {
+  const list = filteredEntries();
+  const total = list.length;
+  el('hist-count').textContent = '共 ' + total + ' 条';
+  const rows = list.slice(0, state.shown);
+  el('hist-list').innerHTML = rows.length
+    ? rows.map(entryRow).join('')
+    : '<div class="text-center text-slate-400 text-sm py-8">还没有符合条件的记录</div>';
+  el('hist-more').classList.toggle('hidden', state.shown >= total);
+}
+
+/* ================================================================
+ * ⑦ 消费页
+ * ================================================================ */
+function spendPreview() {
+  const a = parseFloat(el('spend-amt').value) || 0;
+  const pts = spendPoints(a);
+  const bal = balance();
+  el('spend-preview').textContent = a > 0 ? '将扣除 ' + pts + ' 积分' : '输入金额后自动计算';
+  const blocked = a > 0 && bal < pts;
+  el('spend-blocked').classList.toggle('hidden', !blocked);
+  if (blocked) el('spend-blocked').textContent = '积分不足：当前 ' + bal + ' 分，需要 ' + pts + ' 分，还差 ' + (pts - bal) + ' 分';
+  el('spend-submit').disabled = !(a > 0 && !blocked);
+}
+
+async function spendSubmit() {
+  const a = parseFloat(el('spend-amt').value);
+  const note = el('spend-note').value;
+  const ok = await addSpend(a, note);
+  if (ok) { el('spend-amt').value = ''; el('spend-note').value = ''; spendPreview(); }
+}
+
+function renderSpend() {
+  const rows = state.entries.filter(e => e.type === 'spend').slice(0, 20);
+  el('spend-list').innerHTML = rows.length ? rows.map(e =>
+    '<div class="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">'
+    + '<div class="text-2xl w-8 text-center shrink-0">💸</div>'
+    + '<div class="flex-1 min-w-0"><div class="font-medium truncate">¥' + fmtMoney(e.amount)
+    + (e.note ? ' <span class="text-xs text-slate-400 font-normal">' + esc(e.note) + '</span>' : '') + '</div>'
+    + '<div class="text-xs text-slate-400">' + fmtDT(e.ts) + '</div></div>'
+    + '<div class="text-right shrink-0"><div class="font-bold text-rose-500">' + signed(e.points) + '</div>'
+    + '<div class="flex gap-2 justify-end mt-1 text-xs"><button class="text-slate-400 hover:text-teal-600" onclick="openEdit(\'' + e.id + '\')">编辑</button>'
+    + '<button class="text-rose-400" onclick="askDelete(\'' + e.id + '\')">删除</button></div></div></div>'
+  ).join('') : '<div class="text-center text-slate-400 text-sm py-8">还没有消费记录，钱留着别乱花</div>';
+  spendPreview();
+}
+
+/* ================================================================
+ * ⑧ 奖励页
+ * ================================================================ */
+function renderRewards() {
+  const bal = balance();
+  el('rewards-list').innerHTML = state.rewards.length ? state.rewards.map(r => {
+    const times = Math.floor(bal / r.cost);
+    const can = bal >= r.cost;
+    return '<div class="flex items-center gap-3 p-3 rounded-2xl bg-white shadow-sm border border-slate-100 mb-2">'
+      + '<div class="text-3xl w-10 text-center shrink-0">' + esc(r.icon || '🎁') + '</div>'
+      + '<div class="flex-1 min-w-0"><div class="font-semibold truncate">' + esc(r.name) + '</div>'
+      + '<div class="text-xs text-slate-400">' + r.cost + ' 积分' + (can ? ' · 可兑换 ' + times + ' 次' : '') + '</div></div>'
+      + '<button class="h-10 px-4 rounded-xl text-sm font-semibold shrink-0 ' + (can ? 'bg-teal-600 text-white' : 'bg-slate-100 text-slate-400') + '"'
+      + (can ? ' onclick="openRedeem(\'' + r.id + '\')"' : ' disabled') + '>' + (can ? '兑换' : '积分不足') + '</button>'
+      + '<div class="flex flex-col gap-1 text-xs shrink-0">'
+      + '<button class="text-slate-400 p-1" onclick="openRewardForm(\'' + r.id + '\')">✏️</button>'
+      + '<button class="text-rose-400 p-1" onclick="askDeleteReward(\'' + r.id + '\')">🗑</button></div></div>';
+  }).join('') : '<div class="text-center text-slate-400 text-sm py-8">还没有奖励，点右上角「＋ 新建奖励」给自己定个目标</div>';
+
+  const log = state.entries.filter(e => e.type === 'redeem').slice(0, 50);
+  el('redeem-log').innerHTML = log.length ? log.map(e =>
+    '<div class="flex items-center gap-3 py-2.5 border-b border-slate-100 last:border-0">'
+    + '<div class="text-xl w-8 text-center shrink-0">' + esc(e.rewardIcon || '🎁') + '</div>'
+    + '<div class="flex-1 min-w-0"><div class="font-medium truncate">' + esc(e.rewardName || '奖励') + '</div>'
+    + '<div class="text-xs text-slate-400">' + fmtDT(e.ts) + '</div></div>'
+    + '<div class="text-right shrink-0"><div class="font-bold text-rose-500">' + signed(e.points) + '</div>'
+    + '<button class="text-rose-400 text-xs mt-1" onclick="askDelete(\'' + e.id + '\')">删除（退分）</button></div></div>'
+  ).join('') : '<div class="text-center text-slate-400 text-sm py-6">还没有兑换记录</div>';
+}
+
+let rewardEditId = null, rewardPickEmoji = '🎁';
+function openRewardForm(id) {
+  rewardEditId = id || null;
+  const r = id ? state.rewards.find(x => x.id === id) : null;
+  rewardPickEmoji = r ? r.icon : '🎁';
+  el('rw-title').textContent = r ? '编辑奖励' : '新建奖励';
+  el('rw-name').value = r ? r.name : '';
+  el('rw-cost').value = r ? r.cost : '';
+  renderEmojiGrid();
+  openModal('modal-reward');
+}
+function renderEmojiGrid() {
+  el('rw-icon-grid').innerHTML = CONFIG.rewardEmojis.map(em =>
+    '<button class="w-10 h-10 text-xl rounded-xl ' + (em === rewardPickEmoji ? 'bg-teal-100 ring-2 ring-teal-500' : 'bg-slate-100') + '" onclick="rewardPickEmoji=\'' + em + '\';renderEmojiGrid()">' + em + '</button>'
+  ).join('');
+}
+function rewardFormCancel() { rewardEditId = null; closeModal('modal-reward'); }
+
+async function rewardFormSave() {
+  const name = el('rw-name').value.trim();
+  const cost = parseInt(el('rw-cost').value, 10);
+  if (!name) { toast('给奖励起个名字'); return; }
+  if (!(cost >= 1)) { toast('消耗积分必须是 ≥1 的整数'); return; }
+  if (rewardEditId) {
+    const r = state.rewards.find(x => x.id === rewardEditId);
+    r.name = name; r.cost = cost; r.icon = rewardPickEmoji;
+    await DB.put('rewards', r);
+  } else {
+    await DB.put('rewards', { id: uid(), name: name, cost: cost, icon: rewardPickEmoji });
+  }
+  closeModal('modal-reward');
+  await refresh();
+  toast(rewardEditId ? '奖励已更新' : '奖励已添加');
+}
+
+async function askDeleteReward(id) {
+  const r = state.rewards.find(x => x.id === id);
+  if (!r) return;
+  const ok = await confirmDialog({ title: '删除奖励', msg: '确定删除「' + r.name + '」？历史兑换日志不受影响。', okText: '删除', danger: true });
+  if (!ok) return;
+  await DB.del('rewards', id);
+  await refresh();
+  toast('奖励已删除');
+}
+
+let redeemTarget = null;
+function openRedeem(id) {
+  redeemTarget = state.rewards.find(r => r.id === id);
+  if (!redeemTarget) return;
+  el('redeem-title').textContent = '确认兑换「' + redeemTarget.name + '」？';
+  el('redeem-msg').textContent = '需要 ' + redeemTarget.cost + ' 积分 · 当前 ' + balance() + ' 分，兑换后剩余 ' + (balance() - redeemTarget.cost) + ' 分';
+  openModal('modal-redeem');
+}
+function redeemCancel() { redeemTarget = null; closeModal('modal-redeem'); }
+async function redeemConfirm() {
+  const r = redeemTarget;
+  redeemTarget = null;
+  closeModal('modal-redeem');
+  if (r) await redeemReward(r);
+}
+
+/* ================================================================
+ * ⑨ 核心业务：加分 / 消费 / 兑换 / 编辑 / 删除
+ * 余额永远由流水实时汇总，删记录自动退分，改记录自动重算差额
+ * ================================================================ */
+async function addEarn(itemId, amount) {
+  const it = itemById(itemId);
+  const a = Number(amount);
+  if (!it) { toast('项目不存在'); return false; }
+  if (!isFinite(a) || a <= 0) { toast('数量得是正数，重新输'); return false; }
+  const e = { id: uid(), type: 'earn', itemId: itemId, amount: a, points: earnPoints(it, a), note: '', ts: Date.now() };
+  await DB.put('entries', e);
+  await refresh();
+  toast(it.icon + ' ' + it.name + ' ' + fmtNum(a) + ' ' + it.unit + '，+' + e.points + ' 分', { action: '撤销', fn: () => deleteEntry(e.id, true) });
+  return true;
+}
+
+async function addSpend(amount, note) {
+  const a = Number(amount);
+  if (!isFinite(a) || a <= 0) { toast('金额得是正数，重新输'); return false; }
+  const pts = spendPoints(a);
+  if (balance() < pts) { toast('积分不足：还差 ' + (pts - balance()) + ' 分，先攒分'); return false; }
+  const e = { id: uid(), type: 'spend', amount: a, points: -pts, note: String(note || '').trim(), ts: Date.now() };
+  await DB.put('entries', e);
+  await refresh();
+  toast('已记消费 ¥' + fmtMoney(a) + '，-' + pts + ' 分', { action: '撤销', fn: () => deleteEntry(e.id, true) });
+  return true;
+}
+
+async function redeemReward(r) {
+  const cost = Number(r.cost);
+  if (balance() < cost) { toast('积分不足：还差 ' + (cost - balance()) + ' 分'); return false; }
+  // 兑换日志独立成条，奖励名/图标做快照，后面奖励被改被删也不影响历史
+  const e = { id: uid(), type: 'redeem', rewardId: r.id, rewardName: r.name, rewardIcon: r.icon || '🎁', points: -cost, note: '', ts: Date.now() };
+  await DB.put('entries', e);
+  await refresh();
+  toast((r.icon || '🎁') + ' 已兑换「' + r.name + '」，-' + cost + ' 分', { action: '撤销', fn: () => deleteEntry(e.id, true) });
+  return true;
+}
+
+let editId = null;
+function openEdit(id) {
+  const e = state.entries.find(x => x.id === id);
+  if (!e) return;
+  editId = id;
+  el('edit-title').textContent = e.type === 'earn' ? '编辑产出记录' : '编辑消费记录';
+  if (e.type === 'earn') {
+    const it = itemById(e.itemId);
+    el('edit-body').innerHTML =
+      '<div class="text-sm text-slate-500 mb-3">项目：' + (it ? it.icon + ' ' + it.name : e.itemId) + '（项目不可改，改数量即可）</div>'
+      + '<label class="text-xs text-slate-500">数量（' + (it ? it.unit : '') + '）</label>'
+      + '<input id="edit-amount" type="text" inputmode="decimal" value="' + e.amount + '" oninput="editPreview()" class="w-full h-12 mt-1 px-3 rounded-xl border border-slate-200 text-lg font-bold focus:border-teal-500 focus:outline-none">'
+      + '<label class="text-xs text-slate-500 block mt-3">时间</label>'
+      + '<input id="edit-ts" type="datetime-local" value="' + toLocalInput(e.ts) + '" class="w-full h-12 mt-1 px-3 rounded-xl border border-slate-200 text-sm focus:border-teal-500 focus:outline-none">'
+      + '<div id="edit-preview" class="mt-3 text-sm text-slate-500"></div>';
+  } else {
+    el('edit-body').innerHTML =
+      '<label class="text-xs text-slate-500">金额（元）</label>'
+      + '<input id="edit-amount" type="text" inputmode="decimal" value="' + e.amount + '" oninput="editPreview()" class="w-full h-12 mt-1 px-3 rounded-xl border border-slate-200 text-lg font-bold focus:border-teal-500 focus:outline-none">'
+      + '<label class="text-xs text-slate-500 block mt-3">备注</label>'
+      + '<input id="edit-note" type="text" value="' + esc(e.note || '') + '" class="w-full h-12 mt-1 px-3 rounded-xl border border-slate-200 text-sm focus:border-teal-500 focus:outline-none" placeholder="可选">'
+      + '<label class="text-xs text-slate-500 block mt-3">时间</label>'
+      + '<input id="edit-ts" type="datetime-local" value="' + toLocalInput(e.ts) + '" class="w-full h-12 mt-1 px-3 rounded-xl border border-slate-200 text-sm focus:border-teal-500 focus:outline-none">'
+      + '<div id="edit-preview" class="mt-3 text-sm text-slate-500"></div>';
+  }
+  editPreview();
+  openModal('modal-edit');
+}
+function editPreview() {
+  const e = state.entries.find(x => x.id === editId);
+  if (!e || !el('edit-preview')) return;
+  const a = parseFloat(el('edit-amount').value) || 0;
+  if (e.type === 'earn') {
+    const it = itemById(e.itemId);
+    el('edit-preview').textContent = a > 0 ? '保存后该记录变为 ' + signed(earnPoints(it, a)) + ' 分' : '数量无效';
+  } else {
+    el('edit-preview').textContent = a > 0 ? '保存后该记录变为 -' + spendPoints(a) + ' 分' : '金额无效';
+  }
+}
+function editCancel() { editId = null; closeModal('modal-edit'); }
+async function editSave() {
+  const e = state.entries.find(x => x.id === editId);
+  if (!e) return;
+  const a = parseFloat(el('edit-amount').value);
+  if (!isFinite(a) || a <= 0) { toast('数量/金额不对，重新输'); return; }
+  const ts = el('edit-ts').value ? new Date(el('edit-ts').value).getTime() : e.ts;
+  if (!isFinite(ts)) { toast('时间不对'); return; }
+  if (e.type === 'spend') {
+    const newPts = spendPoints(a);
+    // 可用的 = 当前余额 + 这笔旧扣除（即把旧账退回来再算）
+    if (newPts > balance() - e.points) { toast('积分不够：最多只能改成 ¥' + fmtMoney((balance() - e.points) / CONFIG.SPEND_RATE)); return; }
+  }
+  const note = e.type === 'spend' ? el('edit-note').value.trim() : '';
+  await updateEntry(e.id, { amount: a, note: note, ts: ts });
+  editId = null;
+  closeModal('modal-edit');
+  toast('已保存');
+}
+
+async function updateEntry(id, patch) {
+  const e = state.entries.find(x => x.id === id);
+  if (!e) return;
+  Object.assign(e, patch);
+  if (e.type === 'earn') { const it = itemById(e.itemId); if (it) e.points = earnPoints(it, e.amount); }
+  else if (e.type === 'spend') { e.points = -spendPoints(e.amount); }
+  await DB.put('entries', e);
+  await refresh();
+}
+
+async function deleteEntry(id, silent) {
+  const e = state.entries.find(x => x.id === id);
+  if (!e) return;
+  if (!silent) {
+    const msg = e.type === 'earn'
+      ? '删除后这笔 +' + e.points + ' 分会从余额扣回。'
+      : '删除后扣掉的 ' + (-e.points) + ' 分会退回余额。';
+    const ok = await confirmDialog({ title: '删除记录', msg: msg, okText: '删除', danger: true });
+    if (!ok) return;
+  }
+  await DB.del('entries', id);
+  await refresh();
+  if (!silent) toast('已删除，余额已重新计算');
+}
+
+function askDelete(id) { deleteEntry(id, false); }
+
+/* ================================================================
+ * ⑩ 报表：周报 / 半月报 / 月报 / 年报 / 自定义
+ * ================================================================ */
+function buildReport() {
+  const start = state.report.start, end = state.report.end;
+  const rows = state.entries.filter(e => e.ts >= start && e.ts < end);
+  const byItem = {};
+  let earnPts = 0, incomePts = 0, disciplinePts = 0, spendAmt = 0, spendPts = 0, spendCnt = 0, redeemPts = 0, redeemCnt = 0;
+  rows.forEach(e => {
+    if (e.type === 'earn') {
+      const it = itemById(e.itemId);
+      const b = byItem[e.itemId] || (byItem[e.itemId] = { amount: 0, points: 0 });
+      b.amount += e.amount; b.points += e.points;
+      earnPts += e.points;
+      if (it && it.cat === 'income') incomePts += e.points; else disciplinePts += e.points;
+    } else if (e.type === 'spend') {
+      spendAmt += e.amount; spendPts += -e.points; spendCnt++;
+    } else {
+      redeemPts += -e.points; redeemCnt++;
+    }
+  });
+  return { rows, byItem, earnPts, incomePts, disciplinePts, spendAmt, spendPts, spendCnt, redeemPts, redeemCnt, net: earnPts - spendPts - redeemPts };
+}
+
+function reportTab(type) {
+  if (type !== 'custom' && state.report.type === type) { // 再点一次当前类型 = 回到本期
+    state.report = Object.assign(computePeriod(type, new Date()), { type: type });
+    renderReport();
+    return;
+  }
+  if (type === 'custom') {
+    state.report.type = 'custom';
+    const s = mondayOf(new Date());
+    state.report.start = s.getTime();
+    state.report.end = s.getTime() + 7 * DAY;
+    el('rp-custom-from').value = toDateInput(state.report.start);
+    el('rp-custom-to').value = toDateInput(state.report.end - 1);
+    renderReport();
+    return;
+  }
+  const anchor = new Date(state.report.start);
+  state.report = Object.assign(computePeriod(type, anchor), { type: type });
+  renderReport();
+}
+
+function reportNav(dir) {
+  const t = state.report.type;
+  if (t === 'custom') { toast('自定义区间请直接选日期'); return; }
+  const s = new Date(state.report.start);
+  let anchor;
+  if (t === 'week') anchor = new Date(s.getTime() + dir * 7 * DAY);
+  else if (t === 'month') anchor = new Date(s.getFullYear(), s.getMonth() + dir, 1);
+  else if (t === 'half') {
+    const first = s.getDate() === 1;
+    anchor = first
+      ? (dir > 0 ? new Date(s.getFullYear(), s.getMonth(), 16) : new Date(s.getFullYear(), s.getMonth() - 1, 16))
+      : (dir > 0 ? new Date(s.getFullYear(), s.getMonth() + 1, 1) : new Date(s.getFullYear(), s.getMonth(), 1));
+  }
+  else anchor = new Date(s.getFullYear() + dir, 0, 1);
+  state.report = Object.assign(computePeriod(t, anchor), { type: t });
+  renderReport();
+}
+
+function applyCustom() {
+  const f = el('rp-custom-from').value, to = el('rp-custom-to').value;
+  if (!f || !to) { toast('把起止日期都选上'); return; }
+  const p1 = f.split('-').map(Number), p2 = to.split('-').map(Number);
+  let start = new Date(p1[0], p1[1] - 1, p1[2]).getTime();
+  let end = new Date(p2[0], p2[1] - 1, p2[2]).getTime() + DAY;
+  if (start > end) { const t = start; start = end - DAY; end = t + DAY; }
+  state.report.start = start; state.report.end = end;
+  renderReport();
+}
+
+function renderReport() {
+  if (state.report.type === 'custom') el('rp-custom').classList.remove('hidden');
+  else el('rp-custom').classList.add('hidden');
+  document.querySelectorAll('#rp-tabs button').forEach(b => {
+    const on = b.dataset.type === state.report.type;
+    b.className = 'flex-1 h-10 rounded-xl text-sm font-medium ' + (on ? 'bg-teal-600 text-white' : 'bg-white text-slate-500');
+  });
+  el('rp-label').textContent = fmtDate(state.report.start) + ' ~ ' + fmtDate(state.report.end - 1);
+  const r = buildReport();
+  const netEl = el('rp-net');
+  netEl.textContent = signed(r.net);
+  netEl.className = 'text-4xl font-bold my-1 ' + (r.net >= 0 ? 'text-emerald-600' : 'text-rose-500');
+  el('rp-earn').textContent = '+' + r.earnPts;
+  el('rp-income').textContent = '+' + r.incomePts;
+  el('rp-discipline').textContent = '+' + r.disciplinePts;
+  el('rp-spendAmt').textContent = '¥' + fmtMoney(r.spendAmt);
+  el('rp-spendPts').textContent = '-' + r.spendPts;
+  el('rp-redeemPts').textContent = '-' + r.redeemPts;
+  el('rp-spendCnt').textContent = r.spendCnt + ' 笔';
+  el('rp-redeemCnt').textContent = r.redeemCnt + ' 次';
+  el('rp-items').innerHTML = CONFIG.earnItems.map(it => {
+    const b = r.byItem[it.id] || { amount: 0, points: 0 };
+    return '<div class="flex items-center justify-between py-1.5 text-sm border-b border-slate-50 last:border-0">'
+      + '<span>' + it.icon + ' ' + it.name + '</span>'
+      + '<span class="text-slate-400">' + fmtNum(b.amount) + ' ' + it.unit + '</span>'
+      + '<span class="font-semibold text-emerald-600 w-16 text-right">+' + b.points + '</span></div>';
+  }).join('');
+  renderCharts();
+}
+
+// 周期内按天聚合（跨 100 天以上的比如年报，按月聚合，柱子才看得清）
+function buckets(start, end, rows) {
+  const span = Math.round((end - start) / DAY);
+  const out = [];
+  if (span > 100) {
+    let cur = new Date(start);
+    while (cur.getTime() < end) {
+      const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      const s = cur.getTime(), e2 = Math.min(next.getTime(), end);
+      out.push({ label: (cur.getMonth() + 1) + '月', net: rows.filter(r => r.ts >= s && r.ts < e2).reduce((a, r) => a + r.points, 0) });
+      cur = next;
+    }
+  } else {
+    for (let t = start; t < end; t += DAY) {
+      const d = new Date(t), e2 = t + DAY;
+      out.push({ label: pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()), net: rows.filter(r => r.ts >= t && r.ts < e2).reduce((a, r) => a + r.points, 0) });
+    }
+  }
+  return out;
+}
+
+function renderCharts() {
+  if (state.page !== 'report') return;
+  const offline = el('chart-offline');
+  if (typeof Chart === 'undefined') { offline.classList.remove('hidden'); return; }
+  offline.classList.add('hidden');
+  if (typeof Chart.defaults === 'object') {
+    Chart.defaults.font.family = 'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  }
+  if (state.charts.a) { state.charts.a.destroy(); state.charts.a = null; }
+  if (state.charts.b) { state.charts.b.destroy(); state.charts.b = null; }
+  const r = buildReport();
+  const labels = [], data = [], colors = [];
+  CONFIG.earnItems.forEach(it => { labels.push(it.name); data.push((r.byItem[it.id] || { points: 0 }).points); colors.push('#14b8a6'); });
+  labels.push('消费扣分'); data.push(r.spendPts); colors.push('#f43f5e');
+  labels.push('兑换扣分'); data.push(r.redeemPts); colors.push('#fb7185');
+  state.charts.a = new Chart(el('chart-items'), {
+    type: 'bar',
+    data: { labels: labels, datasets: [{ label: '积分', data: data, backgroundColor: colors, borderRadius: 6, maxBarThickness: 36 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + c.parsed.y + ' 分' } } },
+      scales: { y: { ticks: { callback: v => v + ' 分' }, grid: { color: '#f1f5f9' } }, x: { grid: { display: false }, ticks: { font: { size: 10 } } } },
+    },
+  });
+  const bks = buckets(state.report.start, state.report.end, r.rows);
+  state.charts.b = new Chart(el('chart-trend'), {
+    type: 'bar',
+    data: { labels: bks.map(b => b.label), datasets: [{ label: '净结余', data: bks.map(b => b.net), backgroundColor: bks.map(b => b.net >= 0 ? '#14b8a6' : '#f43f5e'), borderRadius: 4, maxBarThickness: 24 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' 净结余 ' + c.parsed.y + ' 分' } } },
+      scales: { y: { ticks: { callback: v => v + ' 分' }, grid: { color: '#f1f5f9' } }, x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 14 } } },
+    },
+  });
+}
+
+function exportTextReport() {
+  const r = buildReport();
+  const names = { week: '周报', half: '半月报', month: '月报', year: '年报', custom: '自定义报表' };
+  const pad = (s, n) => String(s).padEnd(n, '　');
+  const L = [];
+  L.push('══════════════════════════════════');
+  L.push('       自律积分 · ' + names[state.report.type]);
+  L.push('       统计周期：' + fmtDate(state.report.start) + ' ~ ' + fmtDate(state.report.end - 1));
+  L.push('       生成时间：' + fmtDT(Date.now()));
+  L.push('══════════════════════════════════');
+  L.push('');
+  L.push('【周期净结余】' + signed(r.net) + ' 分');
+  L.push('');
+  L.push('【各项产出】');
+  CONFIG.earnItems.forEach(it => {
+    const b = r.byItem[it.id] || { amount: 0, points: 0 };
+    L.push('  ' + it.icon + ' ' + pad(it.name, 6) + pad(fmtNum(b.amount) + ' ' + it.unit, 10) + '+' + b.points + ' 分');
+  });
+  L.push('  ' + pad('产出合计', 17) + '+' + r.earnPts + ' 分');
+  L.push('');
+  L.push('【分类小计】');
+  L.push('  收入积分（赚钱）          +' + r.incomePts + ' 分');
+  L.push('  自律积分（锻炼/上班/习惯）  +' + r.disciplinePts + ' 分');
+  L.push('');
+  L.push('【消费】');
+  L.push('  实际消费金额   ' + fmtMoney(r.spendAmt) + ' 元（' + r.spendCnt + ' 笔）');
+  L.push('  消费扣除积分   -' + r.spendPts + ' 分');
+  L.push('');
+  L.push('【奖励兑换】');
+  L.push('  兑换 ' + r.redeemCnt + ' 次，扣除积分 -' + r.redeemPts + ' 分');
+  L.push('');
+  L.push('【结余计算】 +' + r.earnPts + '（产出） - ' + r.spendPts + '（消费） - ' + r.redeemPts + '（兑换） = ' + signed(r.net) + ' 分');
+  const text = '﻿' + L.join('\n') + '\n';
+  downloadFile('自律积分-' + names[state.report.type] + '-' + fmtDate(Date.now()).replace(/-/g, '') + '.txt', text, 'text/plain');
+  toast('文本报表已导出');
+}
+
+/* ================================================================
+ * ⑪ 数据页：备份 / 导入 / 清空 / 规则表 / PWA
+ * ================================================================ */
+function renderData() {
+  el('ds-entries').textContent = state.entries.length + ' 条';
+  el('ds-balance').textContent = balance() + ' 分';
+  el('ds-rewards').textContent = state.rewards.length + ' 个';
+  el('ds-spend').textContent = '¥' + fmtMoney(state.entries.filter(e => e.type === 'spend').reduce((s, e) => s + e.amount, 0));
+}
+
+function buildRulesTable() {
+  const rows = CONFIG.earnItems.map(it =>
+    '<tr><td class="py-2 pr-2">' + it.icon + ' ' + it.name + (it.cat === 'income' ? '<span class="text-[10px] text-slate-400">（收入）</span>' : '<span class="text-[10px] text-slate-400">（自律）</span>') + '</td>'
+    + '<td class="text-slate-400">1 ' + it.unit + '</td>'
+    + '<td class="text-emerald-600 font-medium text-right">+' + it.points + ' 分</td></tr>'
+  ).join('');
+  el('data-rules').innerHTML = rows
+    + '<tr class="border-t border-slate-100"><td class="py-2 pr-2">💸 实际消费</td><td class="text-slate-400">1 元</td><td class="text-rose-500 font-medium text-right">-' + CONFIG.SPEND_RATE + ' 分</td></tr>';
+}
+
+function exportJSON() {
+  const data = { app: CONFIG.APP_NAME, version: 1, exportedAt: Date.now(), entries: state.entries, rewards: state.rewards };
+  downloadFile('自律积分备份-' + fmtDate(Date.now()).replace(/-/g, '') + '.json', JSON.stringify(data, null, 2), 'application/json');
+  toast('备份已导出');
+}
+
+async function importPick(file) {
+  if (!file) return;
+  const text = await file.text().then(t => t.replace(/^﻿/, ''));
+  let data;
+  try { data = JSON.parse(text); } catch (e) { toast('JSON 解析失败：文件不是有效备份'); return; }
+  if (!data || !Array.isArray(data.entries)) { toast('格式不对：不是自律积分导出的备份'); return; }
+  const entries = data.entries
+    .filter(e => e && typeof e.id === 'string' && typeof e.points === 'number' && typeof e.ts === 'number' && ['earn', 'spend', 'redeem'].includes(e.type))
+    .map(e => ({
+      id: e.id, type: e.type, itemId: e.itemId || '', amount: Number(e.amount) || 0, points: Math.round(e.points),
+      note: String(e.note || ''), rewardId: e.rewardId || '', rewardName: e.rewardName || '', rewardIcon: e.rewardIcon || '🎁', ts: e.ts,
+    }));
+  const rewards = (Array.isArray(data.rewards) ? data.rewards : [])
+    .filter(r => r && typeof r.id === 'string' && typeof r.cost === 'number')
+    .map(r => ({ id: r.id, name: String(r.name || '未命名奖励'), cost: Math.max(1, Math.round(r.cost)), icon: String(r.icon || '🎁') }));
+  const mode = await importDialog();
+  if (!mode) return;
+  if (mode === 'overwrite') { await DB.clear('entries'); await DB.clear('rewards'); }
+  const eIds = new Set(state.entries.map(e => e.id));
+  const rIds = new Set(state.rewards.map(r => r.id));
+  let added = 0, addedR = 0;
+  for (const e of entries) { if (mode === 'merge' && eIds.has(e.id)) continue; await DB.put('entries', e); added++; }
+  for (const r of rewards) { if (mode === 'merge' && rIds.has(r.id)) continue; await DB.put('rewards', r); addedR++; }
+  el('btn-import-file').value = '';
+  await refresh();
+  toast('导入完成：流水 +' + added + ' 条，奖励 +' + addedR + ' 个');
+}
+
+let importCb = null;
+function importDialog() { return new Promise(res => { importCb = res; openModal('modal-import'); }); }
+function finishImport(v) { const f = importCb; importCb = null; closeModal('modal-import'); if (f) f(v); }
+function importMerge() { finishImport('merge'); }
+function importOverwrite() { finishImport('overwrite'); }
+function importCancel() { finishImport(null); }
+
+async function clearAllData() {
+  const ok = await confirmDialog({
+    title: '清空所有数据',
+    msg: '所有流水和奖励都会被删掉，恢复不了。建议先「导出 JSON 备份」。确定要清空吗？',
+    okText: '清空', danger: true,
+  });
+  if (!ok) return;
+  await DB.clear('entries');
+  await DB.clear('rewards');
+  await refresh();
+  toast('已清空');
+}
+
+/* ================================================================
+ * ⑫ PWA：安装按钮 + 各平台指引 + Service Worker 注册
+ * ================================================================ */
+function initPWA() {
+  // 浏览器规定：SW 只允许 https 或 localhost 注册，file:// 双击打开时自动跳过
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+  renderPWA();
+}
+
+function renderPWA() {
+  const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const show = id => ['pwa-install', 'pwa-ios', 'pwa-android', 'pwa-file', 'pwa-done'].forEach(x => el(x).classList.toggle('hidden', x !== id));
+  if (isStandalone) { show('pwa-done'); return; }
+  if (isIOS) { show('pwa-ios'); return; }
+  if (state.deferredPrompt) { show('pwa-install'); return; }
+  if (location.protocol === 'file:') { show('pwa-file'); return; }
+  show('pwa-android');
+}
+
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); state.deferredPrompt = e; renderPWA(); });
+window.addEventListener('appinstalled', () => { state.deferredPrompt = null; renderPWA(); toast('安装成功'); });
+async function installApp() {
+  const p = state.deferredPrompt;
+  if (!p) return;
+  p.prompt();
+  await p.userChoice;
+  state.deferredPrompt = null;
+  renderPWA();
+}
+
+/* ================================================================
+ * ⑬ 弹窗组件
+ * ================================================================ */
+function openModal(id) { el(id).classList.add('open'); }
+function closeModal(id) { el(id).classList.remove('open'); }
+
+let confirmCb = null;
+function confirmDialog(opts) {
+  return new Promise(res => {
+    confirmCb = res;
+    el('confirm-title').textContent = opts.title;
+    el('confirm-msg').textContent = opts.msg;
+    const ok = el('confirm-ok');
+    ok.textContent = opts.okText || '确定';
+    ok.className = 'flex-1 h-12 rounded-xl text-white font-semibold ' + (opts.danger ? 'bg-rose-500' : 'bg-teal-600');
+    openModal('modal-confirm');
+  });
+}
+function confirmOK() { const f = confirmCb; confirmCb = null; closeModal('modal-confirm'); if (f) f(true); }
+function confirmCancel() { const f = confirmCb; confirmCb = null; closeModal('modal-confirm'); if (f) f(false); }
+
+// 点弹窗外面的灰底 = 取消
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => {
+  if (e.target !== m) return;
+  if (m.id === 'modal-confirm') { confirmCancel(); return; }
+  if (m.id === 'modal-import') { importCancel(); return; }
+  closeModal(m.id);
+}));
+
+/* ================================================================
+ * ⑭ 启动
+ * ================================================================ */
+(async function init() {
+  try {
+    await DB.open();
+  } catch (err) {
+    document.body.innerHTML = '<div class="p-8 text-center text-rose-500">本地数据库打不开：' + esc(String(err && err.message || err)) + '<br>换个浏览器试试（推荐 Chrome / Edge）</div>';
+    return;
+  }
+  state.report = Object.assign(computePeriod('week', new Date()), { type: 'week' });
+  await refresh();
+  buildRecorderChips();
+  buildQuickGrid();
+  buildRulesTable();
+  initPWA();
+  switchPage('home');
+  // 别的标签页改了数据，切回来自动刷新
+  window.addEventListener('focus', refresh);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+})();
+</script>
+</body>
+</html>
